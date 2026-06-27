@@ -1,0 +1,888 @@
+-- ═══════════════════════════════════════════════════
+--           COSMETIC HUB  |  by Claude
+--     Compatibile con executor (es. Synapse, Fluxus)
+--       LocalScript / Executor Script
+-- ═══════════════════════════════════════════════════
+
+local Players        = game:GetService("Players")
+local InsertService  = game:GetService("InsertService")
+local TweenService   = game:GetService("TweenService")
+local RunService     = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local localPlayer = Players.LocalPlayer
+local character   = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+local humanoid    = character:WaitForChild("Humanoid")
+
+-- Aggiorna riferimenti dopo respawn
+localPlayer.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    humanoid  = character:WaitForChild("Humanoid")
+end)
+
+-- ═══════════════════════════════════════
+--              STATO GLOBALE
+-- ═══════════════════════════════════════
+local equippedList   = {}   -- { id, name, accRef }
+local favoritesList  = {}   -- { id, name }
+local isHidden       = false
+local isMinimized    = false
+
+-- ═══════════════════════════════════════
+--            COLORI / TEMA
+-- ═══════════════════════════════════════
+local C = {
+    BG          = Color3.fromRGB(15, 15, 20),
+    PANEL       = Color3.fromRGB(22, 22, 30),
+    CARD        = Color3.fromRGB(30, 30, 42),
+    ACCENT      = Color3.fromRGB(99, 88, 255),
+    ACCENT2     = Color3.fromRGB(60, 200, 140),
+    DANGER      = Color3.fromRGB(220, 60, 60),
+    TEXT        = Color3.fromRGB(230, 230, 240),
+    MUTED       = Color3.fromRGB(130, 130, 155),
+    WHITE       = Color3.fromRGB(255, 255, 255),
+    SUCCESS     = Color3.fromRGB(60, 200, 100),
+    WARNING     = Color3.fromRGB(240, 180, 40),
+}
+
+-- ═══════════════════════════════════════
+--           UTILITÀ UI
+-- ═══════════════════════════════════════
+local function make(class, props, parent)
+    local obj = Instance.new(class)
+    for k, v in pairs(props) do
+        obj[k] = v
+    end
+    if parent then obj.Parent = parent end
+    return obj
+end
+
+local function corner(radius, parent)
+    return make("UICorner", {CornerRadius = UDim.new(0, radius)}, parent)
+end
+
+local function stroke(thickness, color, parent)
+    return make("UIStroke", {Thickness = thickness, Color = color, ApplyStrokeMode = Enum.ApplyStrokeMode.Border}, parent)
+end
+
+local function tween(obj, props, t, style, dir)
+    TweenService:Create(obj,
+        TweenInfo.new(t or 0.2, style or Enum.EasingStyle.Quart, dir or Enum.EasingDirection.Out),
+        props
+    ):Play()
+end
+
+local function hoverEffect(btn, normalColor, hoverColor)
+    btn.MouseEnter:Connect(function()
+        tween(btn, {BackgroundColor3 = hoverColor}, 0.15)
+    end)
+    btn.MouseLeave:Connect(function()
+        tween(btn, {BackgroundColor3 = normalColor}, 0.15)
+    end)
+end
+
+-- ═══════════════════════════════════════
+--          COSTRUZIONE GUI
+-- ═══════════════════════════════════════
+
+-- Rimuovi GUI preesistente
+if localPlayer.PlayerGui:FindFirstChild("CosmeticHub") then
+    localPlayer.PlayerGui.CosmeticHub:Destroy()
+end
+
+local screenGui = make("ScreenGui", {
+    Name            = "CosmeticHub",
+    ResetOnSpawn    = false,
+    ZIndexBehavior  = Enum.ZIndexBehavior.Sibling,
+    IgnoreGuiInset  = true,
+}, localPlayer.PlayerGui)
+
+-- ── FINESTRA PRINCIPALE ─────────────────
+local mainFrame = make("Frame", {
+    Name              = "MainFrame",
+    Size              = UDim2.new(0, 520, 0, 460),
+    Position          = UDim2.new(0.5, -260, 0.5, -230),
+    BackgroundColor3  = C.BG,
+    BorderSizePixel   = 0,
+    Active            = true,
+    ClipsDescendants  = true,
+}, screenGui)
+corner(14, mainFrame)
+stroke(1, Color3.fromRGB(55, 55, 75), mainFrame)
+
+-- ── TITLEBAR ────────────────────────────
+local titleBar = make("Frame", {
+    Size             = UDim2.new(1, 0, 0, 46),
+    BackgroundColor3 = C.PANEL,
+    BorderSizePixel  = 0,
+}, mainFrame)
+corner(14, titleBar)
+
+-- Fix angoli inferiori titlebar
+make("Frame", {
+    Size             = UDim2.new(1, 0, 0, 14),
+    Position         = UDim2.new(0, 0, 1, -14),
+    BackgroundColor3 = C.PANEL,
+    BorderSizePixel  = 0,
+}, titleBar)
+
+local titleIcon = make("TextLabel", {
+    Size              = UDim2.new(0, 34, 0, 34),
+    Position          = UDim2.new(0, 10, 0.5, -17),
+    BackgroundColor3  = C.ACCENT,
+    Text              = "✦",
+    TextColor3        = C.WHITE,
+    TextSize          = 16,
+    Font              = Enum.Font.GothamBold,
+    TextXAlignment    = Enum.TextXAlignment.Center,
+}, titleBar)
+corner(8, titleIcon)
+
+make("TextLabel", {
+    Size           = UDim2.new(0, 180, 1, 0),
+    Position       = UDim2.new(0, 52, 0, 0),
+    BackgroundTransparency = 1,
+    Text           = "Cosmetic Hub",
+    TextColor3     = C.TEXT,
+    TextSize       = 17,
+    Font           = Enum.Font.GothamBold,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, titleBar)
+
+make("TextLabel", {
+    Size           = UDim2.new(0, 180, 1, 0),
+    Position       = UDim2.new(0, 52, 0, 0),
+    BackgroundTransparency = 1,
+    Text           = "  · solo visibile a te",
+    TextColor3     = C.MUTED,
+    TextSize       = 12,
+    Font           = Enum.Font.Gotham,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Bottom,
+}, titleBar):Clone() -- ricreiamo dopo
+
+-- Versione sotto titolo
+local subLabel = make("TextLabel", {
+    Size           = UDim2.new(0, 200, 0, 14),
+    Position       = UDim2.new(0, 52, 0.5, 4),
+    BackgroundTransparency = 1,
+    Text           = "solo visibile a te",
+    TextColor3     = C.MUTED,
+    TextSize       = 11,
+    Font           = Enum.Font.Gotham,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, titleBar)
+
+-- Pulsanti titlebar (Nascondi / Minimize / Chiudi)
+local function makeTitleBtn(icon, xOffset, bgColor, callback)
+    local btn = make("TextButton", {
+        Size             = UDim2.new(0, 26, 0, 26),
+        Position         = UDim2.new(1, xOffset, 0.5, -13),
+        BackgroundColor3 = bgColor,
+        Text             = icon,
+        TextColor3       = C.WHITE,
+        TextSize         = 13,
+        Font             = Enum.Font.GothamBold,
+        BorderSizePixel  = 0,
+    }, titleBar)
+    corner(6, btn)
+    btn.MouseButton1Click:Connect(callback)
+    return btn
+end
+
+-- Chiudi
+makeTitleBtn("✕", -10, Color3.fromRGB(180, 50, 50), function()
+    tween(mainFrame, {Size = UDim2.new(0, 520, 0, 0), Position = UDim2.new(0.5, -260, 0.5, 0)}, 0.25)
+    task.wait(0.26)
+    screenGui:Destroy()
+end)
+
+-- Minimizza
+local minimizeBtn = makeTitleBtn("─", -42, Color3.fromRGB(50, 50, 70), function()
+    if isMinimized then
+        isMinimized = false
+        tween(mainFrame, {Size = UDim2.new(0, 520, 0, 460)}, 0.3)
+    else
+        isMinimized = true
+        tween(mainFrame, {Size = UDim2.new(0, 520, 0, 46)}, 0.3)
+    end
+end)
+
+-- Nascondi (keybind H)
+local hideBtn = makeTitleBtn("H", -74, Color3.fromRGB(50, 50, 70), function()
+    isHidden = not isHidden
+    mainFrame.Visible = not isHidden
+end)
+UserInputService.InputBegan:Connect(function(input, gp)
+    if not gp and input.KeyCode == Enum.KeyCode.RightControl then
+        isHidden = not isHidden
+        mainFrame.Visible = not isHidden
+    end
+end)
+
+-- ── DRAG ────────────────────────────────
+do
+    local dragging, dragStart, startPos
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging  = true
+            dragStart = input.Position
+            startPos  = mainFrame.Position
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            mainFrame.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+end
+
+-- ── TABS ────────────────────────────────
+local tabBar = make("Frame", {
+    Size             = UDim2.new(1, -20, 0, 36),
+    Position         = UDim2.new(0, 10, 0, 52),
+    BackgroundColor3 = C.PANEL,
+    BorderSizePixel  = 0,
+}, mainFrame)
+corner(8, tabBar)
+
+local tabList = make("UIListLayout", {
+    FillDirection = Enum.FillDirection.Horizontal,
+    SortOrder     = Enum.SortOrder.LayoutOrder,
+    Padding       = UDim.new(0, 4),
+}, tabBar)
+make("UIPadding", {PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4), PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4)}, tabBar)
+
+local pages      = {}
+local tabButtons = {}
+local activeTab  = nil
+
+local function makeTab(name, icon)
+    local btn = make("TextButton", {
+        Size             = UDim2.new(0.25, -4, 1, 0),
+        BackgroundColor3 = C.CARD,
+        Text             = icon .. "  " .. name,
+        TextColor3       = C.MUTED,
+        TextSize         = 13,
+        Font             = Enum.Font.GothamBold,
+        BorderSizePixel  = 0,
+        AutoButtonColor  = false,
+    }, tabBar)
+    corner(6, btn)
+
+    local page = make("Frame", {
+        Size             = UDim2.new(1, -20, 0, 346),
+        Position         = UDim2.new(0, 10, 0, 96),
+        BackgroundTransparency = 1,
+        Visible          = false,
+        ClipsDescendants = true,
+    }, mainFrame)
+
+    pages[name]      = page
+    tabButtons[name] = btn
+
+    btn.MouseButton1Click:Connect(function()
+        if activeTab == name then return end
+        -- Disattiva vecchia tab
+        if activeTab then
+            pages[activeTab].Visible = false
+            tween(tabButtons[activeTab], {BackgroundColor3 = C.CARD, TextColor3 = C.MUTED}, 0.15)
+        end
+        activeTab = name
+        page.Visible = true
+        tween(btn, {BackgroundColor3 = C.ACCENT, TextColor3 = C.WHITE}, 0.15)
+    end)
+
+    return page
+end
+
+-- ═══════════════════════════════════════
+--         TAB 1 — EQUIPAGGIA
+-- ═══════════════════════════════════════
+local pageEquip = makeTab("Equipaggia", "🎨")
+
+-- Input ID
+make("TextLabel", {
+    Size           = UDim2.new(1, 0, 0, 18),
+    BackgroundTransparency = 1,
+    Text           = "ID Accessorio",
+    TextColor3     = C.MUTED,
+    TextSize       = 12,
+    Font           = Enum.Font.GothamBold,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, pageEquip)
+
+local inputBox = make("TextBox", {
+    Size             = UDim2.new(1, 0, 0, 40),
+    Position         = UDim2.new(0, 0, 0, 22),
+    BackgroundColor3 = C.CARD,
+    BorderSizePixel  = 0,
+    Text             = "",
+    PlaceholderText  = "Inserisci ID (es. 1234567) oppure URL catalogo",
+    TextColor3       = C.TEXT,
+    PlaceholderColor3 = C.MUTED,
+    TextSize         = 14,
+    Font             = Enum.Font.Gotham,
+    ClearTextOnFocus = false,
+}, pageEquip)
+corner(8, inputBox)
+make("UIPadding", {PaddingLeft = UDim.new(0, 10)}, inputBox)
+stroke(1, Color3.fromRGB(60, 60, 80), inputBox)
+
+-- Pulsante Equipaggia
+local statusLabel
+local function setStatus(msg, color)
+    statusLabel.Text       = msg
+    statusLabel.TextColor3 = color or C.MUTED
+end
+
+local function getIdFromText(text)
+    text = text:match("^%s*(.-)%s*$") -- trim
+    -- URL catalogo: estrai numero
+    local id = text:match("/catalog/(%d+)") or text:match("^(%d+)$")
+    return tonumber(id)
+end
+
+local function equipById(id)
+    if not id then
+        setStatus("✕  ID non valido.", C.DANGER)
+        return
+    end
+    setStatus("⏳  Caricamento asset " .. id .. "…", C.WARNING)
+
+    task.spawn(function()
+        local ok, asset = pcall(InsertService.LoadAsset, InsertService, id)
+        if not ok or not asset then
+            setStatus("✕  Asset non trovato o privato.", C.DANGER)
+            return
+        end
+
+        local acc = asset:FindFirstChildOfClass("Accessory")
+        if not acc then
+            asset:Destroy()
+            setStatus("✕  L'asset non è un accessorio.", C.DANGER)
+            return
+        end
+
+        -- Equipaggia
+        acc.Parent = workspace
+        local char = localPlayer.Character
+        local hum  = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum:AddAccessory(acc)
+            -- Salva in lista
+            table.insert(equippedList, {id = id, name = acc.Name, ref = acc})
+            setStatus("✓  Equipaggiato: " .. acc.Name, C.SUCCESS)
+            -- Aggiorna lista equipped
+            if _G.refreshEquipped then _G.refreshEquipped() end
+        else
+            acc:Destroy()
+            setStatus("✕  Personaggio non trovato.", C.DANGER)
+        end
+        asset:Destroy()
+    end)
+end
+
+local equipBtn = make("TextButton", {
+    Size             = UDim2.new(1, 0, 0, 40),
+    Position         = UDim2.new(0, 0, 0, 68),
+    BackgroundColor3 = C.ACCENT,
+    BorderSizePixel  = 0,
+    Text             = "✦  Equipaggia",
+    TextColor3       = C.WHITE,
+    TextSize         = 15,
+    Font             = Enum.Font.GothamBold,
+    AutoButtonColor  = false,
+}, pageEquip)
+corner(8, equipBtn)
+hoverEffect(equipBtn, C.ACCENT, Color3.fromRGB(120, 110, 255))
+
+equipBtn.MouseButton1Click:Connect(function()
+    equipById(getIdFromText(inputBox.Text))
+end)
+inputBox.FocusLost:Connect(function(enter)
+    if enter then equipById(getIdFromText(inputBox.Text)) end
+end)
+
+-- Pulsante Rimuovi Tutti
+local removeAllBtn = make("TextButton", {
+    Size             = UDim2.new(1, 0, 0, 34),
+    Position         = UDim2.new(0, 0, 0, 114),
+    BackgroundColor3 = C.DANGER,
+    BorderSizePixel  = 0,
+    Text             = "✕  Rimuovi tutti gli accessori",
+    TextColor3       = C.WHITE,
+    TextSize         = 13,
+    Font             = Enum.Font.GothamBold,
+    AutoButtonColor  = false,
+}, pageEquip)
+corner(8, removeAllBtn)
+hoverEffect(removeAllBtn, C.DANGER, Color3.fromRGB(255, 80, 80))
+
+removeAllBtn.MouseButton1Click:Connect(function()
+    local char = localPlayer.Character
+    if not char then setStatus("✕  Personaggio non trovato.", C.DANGER) return end
+    for _, acc in ipairs(char:GetChildren()) do
+        if acc:IsA("Accessory") then acc:Destroy() end
+    end
+    equippedList = {}
+    if _G.refreshEquipped then _G.refreshEquipped() end
+    setStatus("✓  Tutti gli accessori rimossi.", C.SUCCESS)
+end)
+
+statusLabel = make("TextLabel", {
+    Size           = UDim2.new(1, 0, 0, 24),
+    Position       = UDim2.new(0, 0, 0, 154),
+    BackgroundTransparency = 1,
+    Text           = "Inserisci un ID e premi Equipaggia.",
+    TextColor3     = C.MUTED,
+    TextSize       = 12,
+    Font           = Enum.Font.Gotham,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, pageEquip)
+
+-- Separatore
+make("Frame", {
+    Size             = UDim2.new(1, 0, 0, 1),
+    Position         = UDim2.new(0, 0, 0, 182),
+    BackgroundColor3 = Color3.fromRGB(45, 45, 60),
+    BorderSizePixel  = 0,
+}, pageEquip)
+
+make("TextLabel", {
+    Size           = UDim2.new(1, 0, 0, 18),
+    Position       = UDim2.new(0, 0, 0, 188),
+    BackgroundTransparency = 1,
+    Text           = "Equipaggiati in sessione",
+    TextColor3     = C.MUTED,
+    TextSize       = 12,
+    Font           = Enum.Font.GothamBold,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, pageEquip)
+
+-- Scroll lista equipaggiati
+local equippedScroll = make("ScrollingFrame", {
+    Size             = UDim2.new(1, 0, 0, 136),
+    Position         = UDim2.new(0, 0, 0, 208),
+    BackgroundTransparency = 1,
+    ScrollBarThickness = 3,
+    ScrollBarImageColor3 = C.ACCENT,
+    CanvasSize       = UDim2.new(0, 0, 0, 0),
+    BorderSizePixel  = 0,
+}, pageEquip)
+
+local equippedLayout = make("UIListLayout", {
+    SortOrder = Enum.SortOrder.LayoutOrder,
+    Padding   = UDim.new(0, 4),
+}, equippedScroll)
+
+_G.refreshEquipped = function()
+    for _, c in ipairs(equippedScroll:GetChildren()) do
+        if c:IsA("Frame") then c:Destroy() end
+    end
+    for i, item in ipairs(equippedList) do
+        local row = make("Frame", {
+            Size             = UDim2.new(1, -4, 0, 32),
+            BackgroundColor3 = C.CARD,
+            BorderSizePixel  = 0,
+            LayoutOrder      = i,
+        }, equippedScroll)
+        corner(6, row)
+
+        make("TextLabel", {
+            Size           = UDim2.new(1, -80, 1, 0),
+            Position       = UDim2.new(0, 10, 0, 0),
+            BackgroundTransparency = 1,
+            Text           = item.name .. "  (" .. item.id .. ")",
+            TextColor3     = C.TEXT,
+            TextSize       = 12,
+            Font           = Enum.Font.Gotham,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate   = Enum.TextTruncate.AtEnd,
+        }, row)
+
+        -- Rimuovi singolo
+        local removeOne = make("TextButton", {
+            Size             = UDim2.new(0, 60, 0, 22),
+            Position         = UDim2.new(1, -68, 0.5, -11),
+            BackgroundColor3 = C.DANGER,
+            BorderSizePixel  = 0,
+            Text             = "Rimuovi",
+            TextColor3       = C.WHITE,
+            TextSize         = 11,
+            Font             = Enum.Font.GothamBold,
+            AutoButtonColor  = false,
+        }, row)
+        corner(5, removeOne)
+
+        local idx = i
+        removeOne.MouseButton1Click:Connect(function()
+            local entry = equippedList[idx]
+            if entry and entry.ref and entry.ref.Parent then
+                entry.ref:Destroy()
+            end
+            table.remove(equippedList, idx)
+            _G.refreshEquipped()
+        end)
+    end
+    equippedScroll.CanvasSize = UDim2.new(0, 0, 0, equippedLayout.AbsoluteContentSize.Y + 4)
+end
+
+-- ═══════════════════════════════════════
+--         TAB 2 — PREFERITI
+-- ═══════════════════════════════════════
+local pageFav = makeTab("Preferiti", "⭐")
+
+make("TextLabel", {
+    Size           = UDim2.new(1, 0, 0, 18),
+    BackgroundTransparency = 1,
+    Text           = "Salva ID nei preferiti per equipaggiarli subito",
+    TextColor3     = C.MUTED,
+    TextSize       = 12,
+    Font           = Enum.Font.Gotham,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, pageFav)
+
+local favInput = make("TextBox", {
+    Size             = UDim2.new(0.7, -4, 0, 36),
+    Position         = UDim2.new(0, 0, 0, 24),
+    BackgroundColor3 = C.CARD,
+    BorderSizePixel  = 0,
+    Text             = "",
+    PlaceholderText  = "ID accessorio…",
+    TextColor3       = C.TEXT,
+    PlaceholderColor3 = C.MUTED,
+    TextSize         = 14,
+    Font             = Enum.Font.Gotham,
+    ClearTextOnFocus = false,
+}, pageFav)
+corner(7, favInput)
+stroke(1, Color3.fromRGB(60, 60, 80), favInput)
+make("UIPadding", {PaddingLeft = UDim.new(0, 10)}, favInput)
+
+local addFavBtn = make("TextButton", {
+    Size             = UDim2.new(0.3, 0, 0, 36),
+    Position         = UDim2.new(0.7, 4, 0, 24),
+    BackgroundColor3 = C.ACCENT2,
+    BorderSizePixel  = 0,
+    Text             = "Salva ⭐",
+    TextColor3       = C.WHITE,
+    TextSize         = 13,
+    Font             = Enum.Font.GothamBold,
+    AutoButtonColor  = false,
+}, pageFav)
+corner(7, addFavBtn)
+
+local favStatus = make("TextLabel", {
+    Size           = UDim2.new(1, 0, 0, 18),
+    Position       = UDim2.new(0, 0, 0, 64),
+    BackgroundTransparency = 1,
+    Text           = "",
+    TextColor3     = C.SUCCESS,
+    TextSize       = 11,
+    Font           = Enum.Font.Gotham,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, pageFav)
+
+make("Frame", {
+    Size             = UDim2.new(1, 0, 0, 1),
+    Position         = UDim2.new(0, 0, 0, 86),
+    BackgroundColor3 = Color3.fromRGB(45, 45, 60),
+    BorderSizePixel  = 0,
+}, pageFav)
+
+local favScroll = make("ScrollingFrame", {
+    Size             = UDim2.new(1, 0, 0, 246),
+    Position         = UDim2.new(0, 0, 0, 94),
+    BackgroundTransparency = 1,
+    ScrollBarThickness = 3,
+    ScrollBarImageColor3 = C.ACCENT2,
+    CanvasSize       = UDim2.new(0, 0, 0, 0),
+    BorderSizePixel  = 0,
+}, pageFav)
+local favLayout = make("UIListLayout", {
+    SortOrder = Enum.SortOrder.LayoutOrder,
+    Padding   = UDim.new(0, 4),
+}, favScroll)
+
+local function refreshFavList()
+    for _, c in ipairs(favScroll:GetChildren()) do
+        if c:IsA("Frame") then c:Destroy() end
+    end
+    for i, item in ipairs(favoritesList) do
+        local row = make("Frame", {
+            Size             = UDim2.new(1, -4, 0, 36),
+            BackgroundColor3 = C.CARD,
+            BorderSizePixel  = 0,
+            LayoutOrder      = i,
+        }, favScroll)
+        corner(7, row)
+
+        make("TextLabel", {
+            Size           = UDim2.new(1, -130, 1, 0),
+            Position       = UDim2.new(0, 10, 0, 0),
+            BackgroundTransparency = 1,
+            Text           = "⭐  " .. item.name,
+            TextColor3     = C.TEXT,
+            TextSize       = 12,
+            Font           = Enum.Font.Gotham,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate   = Enum.TextTruncate.AtEnd,
+        }, row)
+
+        local equipFav = make("TextButton", {
+            Size             = UDim2.new(0, 60, 0, 24),
+            Position         = UDim2.new(1, -132, 0.5, -12),
+            BackgroundColor3 = C.ACCENT,
+            BorderSizePixel  = 0,
+            Text             = "Indossa",
+            TextColor3       = C.WHITE,
+            TextSize         = 11,
+            Font             = Enum.Font.GothamBold,
+            AutoButtonColor  = false,
+        }, row)
+        corner(5, equipFav)
+
+        local delFav = make("TextButton", {
+            Size             = UDim2.new(0, 56, 0, 24),
+            Position         = UDim2.new(1, -68, 0.5, -12),
+            BackgroundColor3 = C.DANGER,
+            BorderSizePixel  = 0,
+            Text             = "Elimina",
+            TextColor3       = C.WHITE,
+            TextSize         = 11,
+            Font             = Enum.Font.GothamBold,
+            AutoButtonColor  = false,
+        }, row)
+        corner(5, delFav)
+
+        local idx = i
+        equipFav.MouseButton1Click:Connect(function()
+            equipById(favoritesList[idx].id)
+        end)
+        delFav.MouseButton1Click:Connect(function()
+            table.remove(favoritesList, idx)
+            refreshFavList()
+        end)
+    end
+    favScroll.CanvasSize = UDim2.new(0, 0, 0, favLayout.AbsoluteContentSize.Y + 4)
+end
+
+addFavBtn.MouseButton1Click:Connect(function()
+    local id = tonumber(favInput.Text:match("^%s*(.-)%s*$"))
+    if not id then
+        favStatus.Text      = "✕  ID non valido."
+        favStatus.TextColor3 = C.DANGER
+        return
+    end
+    for _, f in ipairs(favoritesList) do
+        if f.id == id then
+            favStatus.Text      = "Già nei preferiti."
+            favStatus.TextColor3 = C.WARNING
+            return
+        end
+    end
+    table.insert(favoritesList, {id = id, name = "ID " .. id})
+    favStatus.Text      = "✓  Aggiunto ai preferiti!"
+    favStatus.TextColor3 = C.SUCCESS
+    favInput.Text = ""
+    refreshFavList()
+end)
+
+-- ═══════════════════════════════════════
+--         TAB 3 — PREIMPOSTATI
+-- ═══════════════════════════════════════
+local pagePreset = makeTab("Preset", "📦")
+
+make("TextLabel", {
+    Size           = UDim2.new(1, 0, 0, 18),
+    BackgroundTransparency = 1,
+    Text           = "Accessori Roblox popolari (clicca per equipaggiare)",
+    TextColor3     = C.MUTED,
+    TextSize       = 12,
+    Font           = Enum.Font.Gotham,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, pagePreset)
+
+local presets = {
+    {name = "Dominus Empyreus",   id = 21070789},
+    {name = "Dominus Frigidus",   id = 144075659},
+    {name = "Dominus Aureus",     id = 73737627},
+    {name = "Korblox Deathspeaker", id = 163624688},
+    {name = "Headless Horseman",  id = 134082579},
+    {name = "Pal Hair",           id = 19027209},
+    {name = "Robloxian 2.0 Hair", id = 55778213},
+    {name = "Blue Hair",          id = 1028788},
+}
+
+local presetScroll = make("ScrollingFrame", {
+    Size             = UDim2.new(1, 0, 0, 318),
+    Position         = UDim2.new(0, 0, 0, 24),
+    BackgroundTransparency = 1,
+    ScrollBarThickness = 3,
+    ScrollBarImageColor3 = C.ACCENT,
+    CanvasSize       = UDim2.new(0, 0, 0, 0),
+    BorderSizePixel  = 0,
+}, pagePreset)
+local presetLayout = make("UIListLayout", {
+    SortOrder = Enum.SortOrder.LayoutOrder,
+    Padding   = UDim.new(0, 4),
+}, presetScroll)
+
+local presetStatus = make("TextLabel", {
+    Size           = UDim2.new(1, 0, 0, 0),
+    BackgroundTransparency = 1,
+    Text           = "",
+    TextColor3     = C.SUCCESS,
+    TextSize       = 11,
+    Font           = Enum.Font.Gotham,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    Position       = UDim2.new(0, 0, 1, -16),
+}, pagePreset)
+
+for i, preset in ipairs(presets) do
+    local row = make("Frame", {
+        Size             = UDim2.new(1, -4, 0, 36),
+        BackgroundColor3 = C.CARD,
+        BorderSizePixel  = 0,
+        LayoutOrder      = i,
+    }, presetScroll)
+    corner(7, row)
+
+    make("TextLabel", {
+        Size           = UDim2.new(1, -100, 1, 0),
+        Position       = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text           = preset.name,
+        TextColor3     = C.TEXT,
+        TextSize       = 13,
+        Font           = Enum.Font.Gotham,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    }, row)
+
+    make("TextLabel", {
+        Size           = UDim2.new(0, 70, 1, 0),
+        Position       = UDim2.new(1, -160, 0, 0),
+        BackgroundTransparency = 1,
+        Text           = tostring(preset.id),
+        TextColor3     = C.MUTED,
+        TextSize       = 11,
+        Font           = Enum.Font.Gotham,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    }, row)
+
+    local eBtn = make("TextButton", {
+        Size             = UDim2.new(0, 70, 0, 24),
+        Position         = UDim2.new(1, -80, 0.5, -12),
+        BackgroundColor3 = C.ACCENT,
+        BorderSizePixel  = 0,
+        Text             = "Equipaggia",
+        TextColor3       = C.WHITE,
+        TextSize         = 11,
+        Font             = Enum.Font.GothamBold,
+        AutoButtonColor  = false,
+    }, row)
+    corner(5, eBtn)
+
+    local pid = preset.id
+    local pname = preset.name
+    eBtn.MouseButton1Click:Connect(function()
+        presetStatus.Text      = "⏳  " .. pname .. "…"
+        presetStatus.TextColor3 = C.WARNING
+        equipById(pid)
+        task.wait(1.5)
+        presetStatus.Text = ""
+    end)
+end
+presetScroll.CanvasSize = UDim2.new(0, 0, 0, presetLayout.AbsoluteContentSize.Y + 4)
+
+-- ═══════════════════════════════════════
+--         TAB 4 — INFO
+-- ═══════════════════════════════════════
+local pageInfo = makeTab("Info", "ℹ")
+
+local infoLines = {
+    {"Come usare", C.ACCENT, 14},
+    {"", C.TEXT, 12},
+    {"1. Tab Equipaggia → inserisci ID o URL Roblox", C.TEXT, 12},
+    {"2. Premi Equipaggia o usa Invio", C.TEXT, 12},
+    {"3. Salva gli ID preferiti nel tab Preferiti", C.TEXT, 12},
+    {"4. Usa i preset popolari dal tab Preset", C.TEXT, 12},
+    {"", C.TEXT, 12},
+    {"Shortcut tastiera", C.ACCENT2, 13},
+    {"", C.TEXT, 12},
+    {"RightCtrl  →  mostra/nascondi la GUI", C.TEXT, 12},
+    {"Invio nel campo ID  →  equipaggia", C.TEXT, 12},
+    {"", C.TEXT, 12},
+    {"Note importanti", Color3.fromRGB(230, 160, 50), 13},
+    {"", C.TEXT, 12},
+    {"• Gli accessori sono visibili SOLO a te", C.TEXT, 12},
+    {"• Gli altri giocatori non li vedranno", C.TEXT, 12},
+    {"• L'ID si trova nell'URL del catalogo Roblox", C.TEXT, 12},
+    {"• L'asset deve essere pubblico e un Accessory", C.TEXT, 12},
+    {"• Usa RightCtrl per nascondere in-game", C.TEXT, 12},
+}
+
+local infoScroll = make("ScrollingFrame", {
+    Size             = UDim2.new(1, 0, 1, 0),
+    BackgroundTransparency = 1,
+    ScrollBarThickness = 3,
+    ScrollBarImageColor3 = C.ACCENT,
+    CanvasSize       = UDim2.new(0, 0, 0, 0),
+    BorderSizePixel  = 0,
+}, pageInfo)
+local infoLayout = make("UIListLayout", {
+    SortOrder = Enum.SortOrder.LayoutOrder,
+    Padding   = UDim.new(0, 2),
+}, infoScroll)
+
+for i, line in ipairs(infoLines) do
+    make("TextLabel", {
+        Size           = UDim2.new(1, -4, 0, line[3] + 6),
+        BackgroundTransparency = 1,
+        Text           = line[1],
+        TextColor3     = line[2],
+        TextSize       = line[3],
+        Font           = (i == 1 or line[3] >= 13) and Enum.Font.GothamBold or Enum.Font.Gotham,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextWrapped    = true,
+        LayoutOrder    = i,
+    }, infoScroll)
+end
+infoScroll.CanvasSize = UDim2.new(0, 0, 0, infoLayout.AbsoluteContentSize.Y)
+
+-- ═══════════════════════════════════════
+--        ATTIVA LA PRIMA TAB
+-- ═══════════════════════════════════════
+-- Attiva la tab Equipaggia di default
+for name, btn in pairs(tabButtons) do
+    if name == "Equipaggia" then
+        pages[name].Visible = true
+        activeTab = name
+        btn.BackgroundColor3 = C.ACCENT
+        btn.TextColor3 = C.WHITE
+    end
+end
+
+-- ═══════════════════════════════════════
+--       ANIMAZIONE APERTURA
+-- ═══════════════════════════════════════
+mainFrame.Size     = UDim2.new(0, 520, 0, 0)
+mainFrame.Position = UDim2.new(0.5, -260, 0.5, 0)
+tween(mainFrame, {
+    Size     = UDim2.new(0, 520, 0, 460),
+    Position = UDim2.new(0.5, -260, 0.5, -230),
+}, 0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+print("[CosmeticHub] Caricato! RightCtrl per mostrare/nascondere.")
